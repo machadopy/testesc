@@ -6,15 +6,32 @@
     <title>Chronometer Pro - MachadoPy</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-database-compat.js"></script>
+
     <style>
-        body { transition: background-color 0.5s ease; min-height: 100vh; display: flex; flex-direction: column; font-family: sans-serif; }
+        body { transition: background-color 0.5s ease; min-height: 100vh; display: flex; flex-direction: column; font-family: sans-serif; overflow-x: hidden; }
         .bg-safe { background-color: #d1e7dd; } 
         .bg-warning-custom { background-color: #cfe2ff; } 
         .bg-danger-custom { background-color: #f8d7da; } 
-        #timer-display { font-size: 6rem; font-weight: bold; font-family: 'Courier New', Courier, monospace; margin: 10px 0; }
-        .setup-container { max-width: 500px; margin: 30px auto; }
+        
+        /* Ajuste Mobile: O tamanho da fonte agora se adapta à largura da tela */
+        #timer-display { 
+            font-size: 18vw; 
+            font-weight: bold; 
+            font-family: 'Courier New', Courier, monospace; 
+            margin: 10px 0;
+            white-space: nowrap; /* Impede que os números quebrem linha */
+        }
+        
+        @media (min-width: 768px) {
+            #timer-display { font-size: 8rem; }
+        }
+
+        .setup-container { max-width: 500px; margin: 20px auto; padding: 20px; }
         .hidden { display: none !important; }
-        .card-ranking { max-width: 900px; margin: 20px auto; }
+        .card-ranking { max-width: 950px; margin: 20px auto; border-radius: 12px; overflow: hidden; }
         footer { margin-top: auto; padding: 15px; text-align: center; border-top: 1px solid #ccc; background: #fff; }
         .clickable-row { cursor: pointer; transition: 0.2s; }
         .clickable-row:hover { background-color: #f1f1f1 !important; }
@@ -23,56 +40,55 @@
 </head>
 <body class="bg-safe">
 
-    <div class="container text-center">
-        <div id="setup-section" class="setup-container card p-4 shadow">
-            <h3 class="mb-4">Configurar Sessão</h3>
+    <div class="container-fluid text-center">
+        <div id="setup-section" class="setup-container card shadow">
+            <h3 class="mb-4">Controle de Produção 🛠️</h3>
             <div class="mb-3 text-start">
                 <label class="form-label fw-bold">Nome do Técnico:</label>
-                <input type="text" id="user-name" class="form-control form-control-lg" placeholder="Seu nome">
+                <input type="text" id="user-name" class="form-control form-control-lg" placeholder="Nome completo">
             </div>
             
             <div class="row text-start mb-4">
-                <div class="col-md-6">
-                    <label class="fw-bold">Modo de Teste:</label>
+                <div class="col-6">
+                    <label class="fw-bold">Modo:</label>
                     <select id="mode-select" class="form-select">
-                        <option value="both">Ambas as Rotas</option>
-                        <option value="onlyA">Apenas Rota A Externa</option>
-                        <option value="onlyB">Apenas Rota B Interna</option>
+                        <option value="both">Ambas Rotas</option>
+                        <option value="onlyA">Rota A (Ext)</option>
+                        <option value="onlyB">Rota B (Int)</option>
                     </select>
                 </div>
-                <div id="start-order-div" class="col-md-6">
-                    <label class="fw-bold">Começar por:</label>
+                <div id="start-order-div" class="col-6">
+                    <label class="fw-bold">Ordem:</label>
                     <select id="start-order" class="form-select">
-                        <option value="A">Rota A Externa</option>
-                        <option value="B">Rota B Interna</option>
+                        <option value="A">A -> B</option>
+                        <option value="B">B -> A</option>
                     </select>
                 </div>
             </div>
             
-            <button onclick="initCountdown()" class="btn btn-success btn-lg w-100">INICIAR AGORA</button>
+            <button onclick="initCountdown()" class="btn btn-success btn-lg w-100 fw-bold">INICIAR TESTE</button>
         </div>
 
-        <div id="timer-section" class="hidden mt-4">
-            <h1 id="current-level-label" class="display-3 fw-bold text-uppercase">--</h1>
+        <div id="timer-section" class="hidden mt-3">
+            <h2 id="current-level-label" class="fw-bold text-uppercase text-primary">--</h2>
             <div id="timer-display">00:00:00</div>
             
             <div id="controls" class="mt-3">
-                <button onclick="nextStep()" id="btn-next" class="btn btn-primary btn-lg px-5 shadow hidden">PRÓXIMO NÍVEL</button>
+                <button onclick="nextStep()" id="btn-next" class="btn btn-primary btn-lg w-75 py-3 shadow hidden fw-bold">PRÓXIMO NÍVEL</button>
                 <div id="finish-actions" class="hidden mt-3">
-                    <button onclick="saveToRanking()" class="btn btn-success btn-lg me-2">SALVAR RESULTADO</button>
-                    <button onclick="discardRun()" class="btn btn-outline-danger">DESCARTAR</button>
+                    <button onclick="saveToRanking()" class="btn btn-success btn-lg px-4 me-2">SALVAR</button>
+                    <button onclick="discardRun()" class="btn btn-outline-danger btn-lg">DESCARTAR</button>
                 </div>
             </div>
         </div>
 
         <div id="chart-container" class="hidden shadow">
-            <h5>Desempenho por Etapa (Segundos)</h5>
             <canvas id="myChart"></canvas>
             <button onclick="document.getElementById('chart-container').classList.add('hidden')" class="btn btn-sm btn-secondary mt-3">Fechar Gráfico</button>
         </div>
 
-        <div class="card card-ranking shadow-sm">
-            <div class="card-header bg-dark text-white fw-bold">🏆 RANKING (Clique na linha para ver o gráfico)</div>
+        <div class="card card-ranking shadow-sm mx-2">
+            <div class="card-header bg-dark text-white fw-bold">🏆 RANKING GERAL</div>
             <div class="table-responsive">
                 <table class="table table-hover mb-0">
                     <thead class="table-light">
@@ -81,30 +97,52 @@
                             <th>Técnico</th>
                             <th>Modo</th>
                             <th>Tempo</th>
-                            <th>Ação</th>
+                            <th>X</th>
                         </tr>
                     </thead>
-                    <tbody id="ranking-body"></tbody>
+                    <tbody id="ranking-body">
+                        <tr><td colspan="5">Carregando nuvem...</td></tr>
+                    </tbody>
                 </table>
             </div>
         </div>
     </div>
 
     <footer>
-        <a href="https://resume.machadopy.me" target="_blank">© machadopy</a>
+        <a href="https://resume.machadopy.me" target="_blank" class="text-decoration-none text-muted">© machadopy.me</a>
     </footer>
 
     <script>
+        // CONFIGURAÇÃO FIREBASE JÁ COM SEUS DADOS
+        const firebaseConfig = {
+            apiKey: "AIzaSyC3XV8QKHSIrlH7rG5Qe68O-VSqrb45kMc",
+            authDomain: "timer-2fc21.firebaseapp.com",
+            databaseURL: "https://timer-2fc21-default-rtdb.firebaseio.com",
+            projectId: "timer-2fc21",
+            storageBucket: "timer-2fc21.firebasestorage.app",
+            messagingSenderId: "330906834816",
+            appId: "1:330906834816:web:989cb447417dbf51bed365"
+        };
+        
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.database();
+
         let timerInterval, seconds = 0, currentStepIndex = 0, fullRoute = [];
-        let levelTimes = []; // Armazena quando cada nível terminou
-        let lastLevelSeconds = 0;
-        const rotaA = ["CINTAR POSTE", "INSTALACAO"];
-        const rotaB = ["RJ11", "RJ45", "TV", "EMTA"];
+        let levelTimes = [], lastLevelSeconds = 0;
+        
+        // Definição das Rotas
+        const rotaA = ["EXT: CINTAR POSTE", "EXT: INSTALACAO"];
+        const rotaB = ["INT: RJ11", "INT: RJ45", "INT: TV", "INT: EMTA"];
+        
         const DELETE_PASS = "machadoobrabo02";
         let myChartInstance = null;
 
         window.onload = () => {
-            updateRankingTable();
+            listenToRanking(); 
+            checkActiveSession();
+        };
+
+        function checkActiveSession() {
             const saved = localStorage.getItem('active_test');
             if (saved) {
                 const data = JSON.parse(saved);
@@ -118,15 +156,14 @@
                     data.isFinished ? showFinishScreen() : resumeSession();
                 }
             }
-        };
+        }
 
         function initCountdown() {
             const name = document.getElementById('user-name').value.trim();
-            if (!name) return alert("Coloca o nome, patrão!");
-
+            if (!name) return alert("Digite seu nome!");
             const mode = document.getElementById('mode-select').value;
             const startOrder = document.getElementById('start-order').value;
-
+            
             if (mode === "onlyA") fullRoute = [...rotaA];
             else if (mode === "onlyB") fullRoute = [...rotaB];
             else fullRoute = startOrder === "A" ? [...rotaA, ...rotaB] : [...rotaB, ...rotaA];
@@ -138,7 +175,6 @@
             let count = 3;
             const display = document.getElementById('timer-display');
             display.innerText = count;
-
             const countdown = setInterval(() => {
                 count--;
                 if (count > 0) display.innerText = count;
@@ -149,7 +185,6 @@
         function startMainTimer() {
             updateUI();
             document.getElementById('btn-next').classList.remove('hidden');
-            if (timerInterval) clearInterval(timerInterval);
             timerInterval = setInterval(() => {
                 seconds++;
                 updateDisplay();
@@ -166,18 +201,14 @@
         }
 
         function nextStep() {
-            // Calcula tempo gasto neste nível específico
             const timeInThisLevel = seconds - lastLevelSeconds;
             levelTimes.push({ label: fullRoute[currentStepIndex], value: timeInThisLevel });
             lastLevelSeconds = seconds;
-
             if (currentStepIndex < fullRoute.length - 1) {
                 currentStepIndex++;
                 updateUI();
                 saveProgress(false);
-            } else {
-                finishSession();
-            }
+            } else { finishSession(); }
         }
 
         function finishSession() {
@@ -189,95 +220,107 @@
         function showFinishScreen() {
             document.getElementById('btn-next').classList.add('hidden');
             document.getElementById('finish-actions').classList.remove('hidden');
-            document.getElementById('current-level-label').innerText = "✅ FINALIZADO";
+            document.getElementById('current-level-label').innerText = "✅ SESSÃO FINALIZADA";
         }
 
         function saveToRanking() {
             const name = document.getElementById('user-name').value;
             const modeLabel = document.getElementById('mode-select').options[document.getElementById('mode-select').selectedIndex].text;
-            const ranking = JSON.parse(localStorage.getItem('ranking') || '[]');
-            ranking.push({ 
-                id: Date.now(), name, mode: modeLabel, seconds, 
+            const newEntry = {
+                id: Date.now(),
+                name: name,
+                mode: modeLabel,
+                seconds: seconds,
                 timeStr: document.getElementById('timer-display').innerText,
-                details: levelTimes 
+                details: levelTimes
+            };
+            db.ref('ranking').push(newEntry).then(() => {
+                localStorage.removeItem('active_test');
+                location.reload();
             });
-            ranking.sort((a, b) => a.seconds - b.seconds);
-            localStorage.setItem('ranking', JSON.stringify(ranking.slice(0, 15)));
-            localStorage.removeItem('active_test');
-            location.reload();
         }
 
-        function showChart(id) {
-            const ranking = JSON.parse(localStorage.getItem('ranking') || '[]');
-            const entry = ranking.find(r => r.id === id);
-            if (!entry || !entry.details) return alert("Dados de gráfico não encontrados para este registro antigo.");
-
-            document.getElementById('chart-container').classList.remove('hidden');
-            const ctx = document.getElementById('myChart').getContext('2d');
-
-            if (myChartInstance) myChartInstance.destroy();
-
-            myChartInstance = new Chart(ctx, {
-                type: 'bar',
-                data: {
-                    labels: entry.details.map(d => d.label),
-                    datasets: [{
-                        label: 'Segundos por Etapa',
-                        data: entry.details.map(d => d.value),
-                        backgroundColor: 'rgba(54, 162, 235, 0.6)',
-                        borderColor: 'rgba(54, 162, 235, 1)',
-                        borderWidth: 1
-                    }]
-                },
-                options: { scales: { y: { beginAtZero: true } } }
+        function listenToRanking() {
+            db.ref('ranking').on('value', (snapshot) => {
+                const data = snapshot.val();
+                let rankingArr = [];
+                if (data) {
+                    rankingArr = Object.keys(data).map(key => ({ dbKey: key, ...data[key] }));
+                    rankingArr.sort((a, b) => a.seconds - b.seconds);
+                }
+                renderTable(rankingArr.slice(0, 15));
             });
-            window.scrollTo(0, 0);
         }
 
-        function deleteEntry(e, id) {
-            e.stopPropagation();
-            if (prompt("Senha para excluir:") === DELETE_PASS) {
-                let ranking = JSON.parse(localStorage.getItem('ranking') || '[]');
-                localStorage.setItem('ranking', JSON.stringify(ranking.filter(r => r.id !== id)));
-                updateRankingTable();
+        function renderTable(ranking) {
+            const tbody = document.getElementById('ranking-body');
+            if (!ranking.length) {
+                tbody.innerHTML = '<tr><td colspan="5">Vazio</td></tr>';
+                return;
             }
+            tbody.innerHTML = ranking.map((r, i) => `
+                <tr class="clickable-row" onclick="showChart('${r.dbKey}')">
+                    <td>${i+1}º</td>
+                    <td class="fw-bold text-start">${r.name}</td>
+                    <td><small>${r.mode}</small></td>
+                    <td><code>${r.timeStr}</code></td>
+                    <td><button onclick="deleteEntry(event, '${r.dbKey}')" class="btn btn-sm btn-link text-danger p-0">X</button></td>
+                </tr>`).join('');
         }
 
-        // Funções de Suporte (Display, BG, Storage)
+        function showChart(dbKey) {
+            db.ref('ranking/' + dbKey).once('value').then((snapshot) => {
+                const entry = snapshot.val();
+                if (!entry) return;
+                document.getElementById('chart-container').classList.remove('hidden');
+                const ctx = document.getElementById('myChart').getContext('2d');
+                if (myChartInstance) myChartInstance.destroy();
+                myChartInstance = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: entry.details ? entry.details.map(d => d.label) : ['Total'],
+                        datasets: [{
+                            label: 'Segundos',
+                            data: entry.details ? entry.details.map(d => d.value) : [entry.seconds],
+                            backgroundColor: '#0d6efd'
+                        }]
+                    },
+                    options: { responsive: true, maintainAspectRatio: true }
+                });
+                window.scrollTo(0, 0);
+            });
+        }
+
+        function deleteEntry(e, dbKey) {
+            e.stopPropagation();
+            if (prompt("Senha admin:") === DELETE_PASS) db.ref('ranking/' + dbKey).remove();
+        }
+
         function updateDisplay() {
             const h = Math.floor(seconds / 3600).toString().padStart(2, '0');
             const m = Math.floor((seconds % 3600) / 60).toString().padStart(2, '0');
             const s = (seconds % 60).toString().padStart(2, '0');
             document.getElementById('timer-display').innerText = `${h}:${m}:${s}`;
         }
+
         function updateBackground() {
             const b = document.body;
             b.className = seconds > 2700 ? 'bg-danger-custom' : seconds > 1800 ? 'bg-warning-custom' : 'bg-safe';
         }
+
         function updateUI() { document.getElementById('current-level-label').innerText = fullRoute[currentStepIndex] || "FIM"; }
+
         function saveProgress(isFinished) {
             localStorage.setItem('active_test', JSON.stringify({
                 userName: document.getElementById('user-name').value,
                 seconds, currentStepIndex, fullRoute, isRunning: true, isFinished, levelTimes, lastLevelSeconds
             }));
         }
-        function discardRun() { if (confirm("Descartar?")) { localStorage.removeItem('active_test'); location.reload(); } }
-        function updateRankingTable() {
-            const ranking = JSON.parse(localStorage.getItem('ranking') || '[]');
-            const tbody = document.getElementById('ranking-body');
-            tbody.innerHTML = ranking.length ? ranking.map((r, i) => `
-                <tr class="clickable-row" onclick="showChart(${r.id})">
-                    <td>${i+1}º</td>
-                    <td class="fw-bold">${r.name}</td>
-                    <td><small>${r.mode}</small></td>
-                    <td><code>${r.timeStr}</code></td>
-                    <td><button onclick="deleteEntry(event, ${r.id})" class="btn btn-sm btn-outline-danger">X</button></td>
-                </tr>`).join('') : '<tr><td colspan="5">Sem recordes.</td></tr>';
-        }
+
+        function discardRun() { if (confirm("Limpar teste atual?")) { localStorage.removeItem('active_test'); location.reload(); } }
         
-        // Esconde ordem se for apenas uma rota
         document.getElementById('mode-select').addEventListener('change', function() {
-            document.getElementById('start-order-div').className = this.value === 'both' ? 'col-md-6' : 'hidden';
+            document.getElementById('start-order-div').className = this.value === 'both' ? 'col-6' : 'hidden';
         });
     </script>
 </body>
